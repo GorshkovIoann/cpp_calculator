@@ -6,34 +6,10 @@
   We have inserted 3 bugs that the compiler will catch and 3 that it won't.
 */
 
+#include "Token_stream.h"
 #include "std_lib_facilities.h"
 
-struct Token
-{
-  char kind;
-  double value;
-  string name;
-
-  Token(char ch) : kind{ch}, value{0} {}
-  Token(char ch, string id) : kind{ch},value{0}, name{id} {}
-  Token(char ch, double val) : kind{ch}, value{val} {}
-};
-
-class Token_stream
-{
-  bool full{false};
-  Token buffer{'\0'};
-
-public:
-  Token_stream() {}
-
-  Token get ();
-  void putback (Token t);
-
-  void ignore (char);
-};
-
-void Token_stream::putback(Token t)
+/*void Token_stream::putback(Token t)
 {
   if (full)
     error("putback() into a full buffer");
@@ -41,6 +17,7 @@ void Token_stream::putback(Token t)
   buffer = t;
   full = true;
 }
+*/
 
 constexpr char quit = 'q';
 constexpr char print = ';';
@@ -52,7 +29,7 @@ const string prompt = "> ";
 const string result = "= ";
 const string declkey = "let";
 
-Token Token_stream::get()
+/*Token Token_stream::get()  // обрабатывает полученный символ как токен
 {
   if (full)
   {
@@ -65,7 +42,7 @@ Token Token_stream::get()
 
   switch (ch)
   {
-  
+
   case '(':
   case quit:
   case ')':
@@ -96,13 +73,13 @@ Token Token_stream::get()
     return Token{number, val};
   }
 
-  default:
+  default:  // проверка коректности имени введенной переменной
     if (isalpha(ch))
     {
       string s;
       s += ch;
       while (cin.get(ch) && (isalpha(ch) || isdigit(ch)))
-        s = ch;
+        s += ch;
       cin.putback(ch);
 
       if (s == declkey)
@@ -114,7 +91,7 @@ Token Token_stream::get()
   }
 }
 
-void Token_stream::ignore(char c)
+void Token_stream::ignore(char c)  // c represents the kind of Token
 {
   if (full && c == buffer.kind)
   {
@@ -128,8 +105,9 @@ void Token_stream::ignore(char c)
     if (ch == c)
       return;
 }
-
-struct Variable //структура для работы с переменными и встроенными константами
+*/
+struct Variable  // структура для работы с переменными и встроенными
+                 // константами
 
 {
   string name;
@@ -140,22 +118,22 @@ struct Variable //структура для работы с переменным
 
 vector<Variable> var_table;
 
-double get_value (string s)//возвращает значение переменной с именем s
+double get_value (string s)  // возвращает значение переменной с именем s
 {
-  for (int i = 0; i < var_table.size(); ++i)
-    if (var_table[i].name == s)
-      return var_table[i].value;
+  for (Variable v : var_table)
+    if (v.name == s)
+      return v.value;
 
   error("get: undefined name ", s);
 }
 
-void set_value (string s, double d)//присваивает обьекту s значение d
+void set_value (string s, double d)  // присваивает обьекту s значение d
 {
-  for (int i = 0; i <= var_table.size(); ++i)
+  for (Variable v : var_table)
   {
-    if (var_table[i].name == s)
+    if (v.name == s)
     {
-      var_table[i].value = d;
+      v.value = d;
       return;
     }
   }
@@ -163,16 +141,18 @@ void set_value (string s, double d)//присваивает обьекту s з�
   error("set: undefined name ", s);
 }
 
-bool is_declared (string s)
+bool is_declared (string s)  // есть ли переменная в векторе var_table
 {
-  for (int i = 0; i < var_table.size(); ++i)
-    if (var_table[i].name == s)
+  for (Variable v : var_table)
+    if (v.name == s)
       return true;
 
   return false;
 }
 
-double define_name (string var, double val)
+double
+define_name (string var,
+             double val)  // добавить пару (var,val) в векттор var_table
 {
   if (is_declared(var))
     error(var, " declared twice");
@@ -186,7 +166,7 @@ Token_stream ts;
 
 double expression ();
 
-double primary ()
+double primary ()  // функция обрабатывает числа и скобки
 {
   Token t = ts.get();
   switch (t.kind)
@@ -197,6 +177,7 @@ double primary ()
     t = ts.get();
     if (t.kind != ')')
       error("'(' expected");
+    return d;
   }
 
   case '-':
@@ -215,7 +196,7 @@ double primary ()
   }
 }
 
-double term ()
+double term ()  // функция работает со знаками * и /
 {
   double left = primary();
 
@@ -237,6 +218,15 @@ double term ()
       left /= d;
       break;
     }
+    case '%':
+    {
+      double d = primary();
+      if (d == 0)
+        error("%: divide by zero");
+      left = fmod(left, d);
+      t = ts.get();
+      break;
+    }
 
     default:
       ts.putback(t);
@@ -245,7 +235,7 @@ double term ()
   }
 }
 
-double expression ()
+double expression ()  // функция работает с плюсами и минусами
 {
   double left = term();
 
@@ -270,24 +260,25 @@ double expression ()
   }
 }
 
-double declaration () //проверяет,что после let находится имя=выражение
+double declaration ()  // проверяет,что после let находится имя=выражение
+                       // обьявляет переменную с именем и начальным
+                       // значением заданным выражением
 {
   Token t = ts.get();
   if (t.kind != name)
     error("name expected in declaration");
+  string var_name = t.name;
 
-  string var = t.name;
-  if (is_declared(var))
-    error(var, " declared twice");
+  Token t2 = ts.get();
+  if (t2.kind != '=')
+    error("= missing in declaration of ", var_name);
 
-  t = ts.get();
-  if (t.kind != '=')
-    error("'=' missing in declaration of ", var);
-
-  return define_name(var, expression());
+  double d = expression();
+  define_name(var_name, d);
+  return d;
 }
 
-double statement ()//позволяет добавить инфтукцию "let"
+double statement ()  // позволяет добавить инфтукцию "let"
 {
   Token t = ts.get();
   switch (t.kind)
@@ -302,9 +293,9 @@ double statement ()//позволяет добавить инфтукцию "let
 
 void clean_up_mess () { ts.ignore(print); }
 
-void calculate ()//считывает выражениеб отправляет на обраюотку
+void calculate ()  // считывает выражение отправляет на обработку
 {
-  while (cin)//(true$sin)
+  while (cin)  //(true$sin)
     try
     {
       cout << prompt;
@@ -317,19 +308,19 @@ void calculate ()//считывает выражениеб отправляет 
       ts.putback(t);
       cout << result << statement() << endl;
     }
-    catch (exception& e)//(runtime$exetion)
+    catch (exception& e)  //(runtime$exetion)
     {
       cerr << e.what() << endl;
       clean_up_mess();
     }
 }
 
-int main ()//определяет зарезервированные константы
-           //вызывает метод calculate и обрабатывает ошибки
+int main ()  // определяет зарезервированные константы
+             // вызывает метод calculate и обрабатывает ошибки
 try
 {
   define_name("pi", 3.141592653589793);
-  define_name("k",1000);//создали 
+  define_name("k", 1000);  // создали
   define_name("e", 2.718281828459045);
 
   calculate();
